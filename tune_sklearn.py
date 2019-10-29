@@ -55,9 +55,7 @@ class TuneCV(BaseEstimator):
     @property
     def predict(self):
         #check_is_fitted(self, "cv_results_")
-        #return self.best_estimator_.predict
-
-        return self.best_estimator.predict
+        return self.best_estimator_.predict
 
     @property
     def predict_log_proba(self):
@@ -74,8 +72,15 @@ class TuneCV(BaseEstimator):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.transform
 
-    def __init__(self, estimator, scheduler, param_grid, num_samples, cv=3, refit=True, scoring=None
-            ):
+    def __init__(self, 
+                 estimator, 
+                 scheduler, 
+                 param_grid, 
+                 num_samples, 
+                 cv=3, 
+                 refit=True, 
+                 scoring=None,
+    ):
         self.estimator = estimator
         self.scheduler = scheduler
         self.num_samples = num_samples
@@ -85,8 +90,12 @@ class TuneCV(BaseEstimator):
         self.param_grid = param_grid
 
 
-    def _refit(self, X,  y=None, **fit_params):
-        pass
+    def _refit(self, X, y=None, **fit_params):
+        self.best_estimator_ = clone(self.estimator)
+
+        self.best_estimator_.set_params(**fit_params)
+
+        self.best_estimator_.fit(X, y, **fit_params)
 
     def fit(self, X, y=None, groups=None, **fit_params):
         scheduler = self.get_scheduler(self.scheduler)
@@ -102,7 +111,6 @@ class TuneCV(BaseEstimator):
         config['cv'] = cv
         config['fit_params'] = fit_params
         config['scoring'] = self.scoring
-        self.add_hyper_to_config(self.param_grid, config)
         analysis = tune.run(
                 _Trainable,
                 scheduler=MedianStoppingRule(),
@@ -115,15 +123,10 @@ class TuneCV(BaseEstimator):
                 )
 
         if self.refit:
-            best_config = analysis.get_best_config(metric="test accuracy")
+            best_config = analysis.get_best_config(metric="test_accuracy")
             for key in ['estimator', 'scheduler', 'param_grid', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring']:
                 best_config.pop(key)
-            self.best_estimator = clone(self.estimator)
-
-            self.best_estimator.set_params(**best_config)
-
-            self.best_estimator.fit(X, y, **fit_params)
-
+            self._refit(X, y, **best_config)
 
         return self
 
@@ -144,28 +147,21 @@ class TuneCV(BaseEstimator):
                 }
             )
 
-    def add_hyper_to_config(self, param_grid, config):
-        for name, distribution in self.param_grid.items():
-            config[name] = tune.sample_from(lambda spec: distribution)
-
 
 class _Trainable(Trainable):
 
     def _setup(self, config):
-        self.estimator = clone(config['estimator'])
-        self.scheduler = config['scheduler']
-        self.param_grid = config['param_grid']
-        self.X = config['X']
-        self.y = config['y']
-        self.groups = config['groups']
-        self.cv = config['cv']
-        self.fit_params = config['fit_params']
-        self.scoring = config['scoring']
+        self.estimator = clone(config.pop('estimator'))
+        self.scheduler = config.pop('scheduler')
+        self.param_grid = config.pop('param_grid')
+        self.X = config.pop('X')
+        self.y = config.pop('y')
+        self.groups = config.pop('groups')
+        self.cv = config.pop('cv')
+        self.fit_params = config.pop('fit_params')
+        self.scoring = config.pop('scoring')
 
-        for key in ['estimator', 'scheduler', 'param_grid', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring']:
-            config.pop(key)
-
-        print(config)
+        # print(config)
 
         self.estimator_config = config
 
@@ -185,7 +181,7 @@ class _Trainable(Trainable):
         )
 
         return {
-                "test accuracy": sum(scores["test_score"])/len(scores["test_score"])
+                "test_accuracy": sum(scores["test_score"])/len(scores["test_score"])
                 }
 
 

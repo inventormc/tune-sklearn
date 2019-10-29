@@ -1,4 +1,5 @@
 from tune_sklearn import TuneCV
+from ray import tune
 import sklearn
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
@@ -12,7 +13,7 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2)
 
 clf = RandomForestClassifier()
 param_grid = {
-        'n_estimators': random.randint(20,80)
+    'n_estimators': tune.sample_from(lambda spec: random.randint(20,80))
 }
 
 
