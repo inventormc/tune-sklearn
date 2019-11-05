@@ -8,7 +8,7 @@ import random
 iris = load_iris()
 x = iris.data
 y = iris.target
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2)
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.5)
 
 clf = RandomForestClassifier()
 param_grid = {

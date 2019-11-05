@@ -9,49 +9,59 @@ from ray.tune.schedulers import PopulationBasedTraining, MedianStoppingRule
 from sklearn.base import clone
 
 class TuneCV(BaseEstimator):
+    # TODO
     @property
     def _estimator_type(self):
         return self.estimator._estimator_type
 
+    # TODO
     @property
     def best_params_(self):
         check_is_fitted(self, "cv_results_")
         return self.cv_results_.best_params # Will need to modify this based off of `fit()`
 
+    # TODO
     @property
     def best_score_(self):
         check_is_fitted(self, "cv_results_")
         return self.cv_results_.best_value
 
+    # TODO
     @property
     def best_trial_(self):
         check_is_fitted(self, "cv_results_")
         return self.cv_results_.best_trial_
 
+    # TODO
     @property
     def classes_(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.classes_
 
+    # TODO
     @property
     def n_trials_(self):
         return len(self.trials_)
 
+    # TODO
     @property
     def trials_(self):
         check_is_fitted(self, "cv_results")
         return self.cv_results_.trials
 
+    # TODO
     @property
     def decision_function(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.decision_function
 
+    # TODO
     @property
     def inverse_transform(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.inverse_transform
 
+    # TODO
     @property
     def predict(self):
         #check_is_fitted(self, "cv_results_")
@@ -59,21 +69,25 @@ class TuneCV(BaseEstimator):
 
         return self.best_estimator.predict
 
+    # TODO
     @property
     def predict_log_proba(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.predict_log_proba
 
+    # TODO
     @property
     def predict_proba(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.predict_proba
 
+    # TODO
     @property
     def transform(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.transform
 
+    # TODO: Add all arguments found in optuna to constructor
     def __init__(self, estimator, scheduler, param_grid, num_samples, cv=3, refit=True, scoring=None
             ):
         self.estimator = estimator
@@ -84,7 +98,7 @@ class TuneCV(BaseEstimator):
         self.refit = refit
         self.param_grid = param_grid
 
-
+    # TODO
     def _refit(self, X,  y=None, **fit_params):
         pass
 
@@ -129,9 +143,11 @@ class TuneCV(BaseEstimator):
 
 
 
+    # TODO
     def score(self, X, y=None):
         pass
 
+    # TODO
     def get_scheduler(self, scheduler):
         if scheduler == "pbt":
             return PopulationBasedTraining(
@@ -192,6 +208,7 @@ class _Trainable(Trainable):
     def _save(self, checkpoint_dir):
         return self.config
 
+    # TODO
     def _restore(self, checkpoint):
         pass
 
