@@ -7,6 +7,7 @@ from ray import tune
 from ray.tune import Trainable
 from ray.tune.schedulers import PopulationBasedTraining, MedianStoppingRule
 from sklearn.base import clone
+import numpy as np
 
 class TuneCV(BaseEstimator):
     # TODO
@@ -65,9 +66,7 @@ class TuneCV(BaseEstimator):
     @property
     def predict(self):
         #check_is_fitted(self, "cv_results_")
-        #return self.best_estimator_.predict
-
-        return self.best_estimator.predict
+        return self.best_estimator_.predict
 
     # TODO
     @property
@@ -88,8 +87,15 @@ class TuneCV(BaseEstimator):
         return self.best_estimator_.transform
 
     # TODO: Add all arguments found in optuna to constructor
-    def __init__(self, estimator, scheduler, param_grid, num_samples, cv=3, refit=True, scoring=None
-            ):
+    def __init__(self,
+                 estimator,
+                 scheduler,
+                 param_grid=None,
+                 num_samples=3,
+                 cv=3,
+                 refit=True,
+                 scoring=None,
+    ):
         self.estimator = estimator
         self.scheduler = scheduler
         self.num_samples = num_samples
@@ -98,29 +104,35 @@ class TuneCV(BaseEstimator):
         self.refit = refit
         self.param_grid = param_grid
 
-    # TODO
-    def _refit(self, X,  y=None, **fit_params):
-        pass
+    def _refit(self, X, y=None, **fit_params):
+        self.best_estimator_ = clone(self.estimator)
+
+        self.best_estimator_.set_params(**self.best_params)
+
+        self.best_estimator_.fit(X, y, **fit_params)
 
     def fit(self, X, y=None, groups=None, **fit_params):
-        scheduler = self.get_scheduler(self.scheduler)
         classifier = is_classifier(self.estimator)
         cv = check_cv(self.cv, y, classifier)
         config={}
+        hyperparams = self.param_grid
+        for key, distribution in hyperparams.items():
+            if isinstance(distribution, (list, np.ndarray)):
+                config[key] =  tune.grid_search(list(distribution))
+            else:
+                config[key] = distribution
+        print(config)
         config['estimator'] = self.estimator
-        config['scheduler'] = scheduler
-        config['param_grid'] = self.param_grid
+        config['scheduler'] = self.scheduler
         config['X'] = X
         config['y'] = y
         config['groups'] = groups
         config['cv'] = cv
         config['fit_params'] = fit_params
         config['scoring'] = self.scoring
-        self.add_hyper_to_config(self.param_grid, config)
         analysis = tune.run(
                 _Trainable,
-                scheduler=MedianStoppingRule(),
-                #scheduler=scheduler,
+                scheduler=self.scheduler,
                 reuse_actors=True,
                 verbose=True,
                 stop={"training_iteration":1},
@@ -129,15 +141,11 @@ class TuneCV(BaseEstimator):
                 )
 
         if self.refit:
-            best_config = analysis.get_best_config(metric="test accuracy")
-            for key in ['estimator', 'scheduler', 'param_grid', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring']:
+            best_config = analysis.get_best_config(metric="test_accuracy")
+            for key in ['estimator', 'scheduler', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring']:
                 best_config.pop(key)
-            self.best_estimator = clone(self.estimator)
-
-            self.best_estimator.set_params(**best_config)
-
-            self.best_estimator.fit(X, y, **fit_params)
-
+            self.best_params = best_config
+            self._refit(X, y, **fit_params)
 
         return self
 
@@ -147,7 +155,8 @@ class TuneCV(BaseEstimator):
     def score(self, X, y=None):
         pass
 
-    # TODO
+    # We may not need this function if the user passes in the actual scheduler
+    # but then they need to follow this syntax for the hyperparam_mutations
     def get_scheduler(self, scheduler):
         if scheduler == "pbt":
             return PopulationBasedTraining(
@@ -160,28 +169,18 @@ class TuneCV(BaseEstimator):
                 }
             )
 
-    def add_hyper_to_config(self, param_grid, config):
-        for name, distribution in self.param_grid.items():
-            config[name] = tune.sample_from(lambda spec: distribution)
-
 
 class _Trainable(Trainable):
 
     def _setup(self, config):
-        self.estimator = clone(config['estimator'])
-        self.scheduler = config['scheduler']
-        self.param_grid = config['param_grid']
-        self.X = config['X']
-        self.y = config['y']
-        self.groups = config['groups']
-        self.cv = config['cv']
-        self.fit_params = config['fit_params']
-        self.scoring = config['scoring']
-
-        for key in ['estimator', 'scheduler', 'param_grid', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring']:
-            config.pop(key)
-
-        print(config)
+        self.estimator = clone(config.pop('estimator'))
+        self.scheduler = config.pop('scheduler')
+        self.X = config.pop('X')
+        self.y = config.pop('y')
+        self.groups = config.pop('groups')
+        self.cv = config.pop('cv')
+        self.fit_params = config.pop('fit_params')
+        self.scoring = config.pop('scoring')
 
         self.estimator_config = config
 
@@ -200,15 +199,16 @@ class _Trainable(Trainable):
             scoring=self.scoring
         )
 
+        self.test_accuracy = sum(scores["test_score"])/len(scores["test_score"])
+
         return {
-                "test accuracy": sum(scores["test_score"])/len(scores["test_score"])
+                "test_accuracy": self.test_accuracy
                 }
 
 
     def _save(self, checkpoint_dir):
-        return self.config
+        pass
 
-    # TODO
     def _restore(self, checkpoint):
         pass
 
