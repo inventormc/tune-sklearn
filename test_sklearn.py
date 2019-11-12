@@ -1,4 +1,6 @@
 from tune_sklearn import TuneCV
+from scipy.stats import randint
+from sklearn.model_selection import GridSearchCV
 from ray import tune
 import numpy as np
 from sklearn import datasets
@@ -8,6 +10,8 @@ from sklearn import linear_model
 from sklearn.ensemble import RandomForestClassifier
 from ray.tune.schedulers import PopulationBasedTraining, MedianStoppingRule
 import random
+
+# TODO: Either convert to individual examples or to python unittests
 
 class MockClassifier:
     """Dummy classifier to test the parameter search algorithms"""
@@ -81,7 +85,7 @@ def pbt():
 
     clf = RandomForestClassifier()
     param_grid = {
-        'n_estimators': tune.sample_from(lambda spec: random.randint(20,80))
+        'n_estimators': randint(20, 80)
     }
 
 
@@ -101,6 +105,7 @@ def pbt():
     print(pred)
     accuracy = np.count_nonzero(np.array(pred) == np.array(y_test))/len(pred)
     print(accuracy)
+    print(tune_search.best_params)
 
 def linear_iris():
     iris = datasets.load_iris()

@@ -1,3 +1,4 @@
+from scipy.stats import _distn_infrastructure
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_is_fitted
 from sklearn.model_selection import cross_validate
@@ -18,14 +19,12 @@ class TuneCV(BaseEstimator):
     # TODO
     @property
     def best_params_(self):
-        check_is_fitted(self, "cv_results_")
-        return self.cv_results_.best_params # Will need to modify this based off of `fit()`
+        return self.best_estimator_.best_params
 
     # TODO
     @property
     def best_score_(self):
-        check_is_fitted(self, "cv_results_")
-        return self.cv_results_.best_value
+        return self.best_estimator_.best_value
 
     # TODO
     @property
@@ -36,7 +35,6 @@ class TuneCV(BaseEstimator):
     # TODO
     @property
     def classes_(self):
-        check_is_fitted(self, "cv_results_")
         return self.best_estimator_.classes_
 
     # TODO
@@ -105,10 +103,6 @@ class TuneCV(BaseEstimator):
         self.param_grid = param_grid
 
     def _refit(self, X, y=None, **fit_params):
-        self.best_estimator_ = clone(self.estimator)
-
-        self.best_estimator_.set_params(**self.best_params)
-
         self.best_estimator_.fit(X, y, **fit_params)
 
     def fit(self, X, y=None, groups=None, **fit_params):
@@ -118,10 +112,12 @@ class TuneCV(BaseEstimator):
         hyperparams = self.param_grid
         for key, distribution in hyperparams.items():
             if isinstance(distribution, (list, np.ndarray)):
-                config[key] =  tune.grid_search(list(distribution))
+                config[key] = tune.grid_search(list(distribution))
+            elif isinstance(distribution, (_distn_infrastructure.rv_frozen)):
+                config[key] = tune.sample_from(lambda spec: distribution.rvs(1)[0])
             else:
-                config[key] = distribution
-        print(config)
+                config[key] = tune.sample_from(lambda spec: distribution)
+
         config['estimator'] = self.estimator
         config['scheduler'] = self.scheduler
         config['X'] = X
@@ -134,17 +130,19 @@ class TuneCV(BaseEstimator):
                 _Trainable,
                 scheduler=self.scheduler,
                 reuse_actors=True,
-                verbose=True,
+                verbose=True, # silence in the future
                 stop={"training_iteration":1},
                 num_samples=self.num_samples,
                 config=config
                 )
 
+        best_config = analysis.get_best_config(metric="test_accuracy")
+        for key in ['estimator', 'scheduler', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring']:
+            best_config.pop(key)
+        self.best_params = best_config
+        self.best_estimator_ = clone(self.estimator)
+        self.best_estimator_.set_params(**self.best_params)
         if self.refit:
-            best_config = analysis.get_best_config(metric="test_accuracy")
-            for key in ['estimator', 'scheduler', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring']:
-                best_config.pop(key)
-            self.best_params = best_config
             self._refit(X, y, **fit_params)
 
         return self
