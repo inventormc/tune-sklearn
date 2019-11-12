@@ -172,8 +172,10 @@ class TuneCV(BaseEstimator):
             self._refit(X, y, **fit_params)
         else:
             logdir = analysis.get_best_logdir(metric="average_test_score", mode="max")
-            with open(os.path.join(logdir, "checkpoint"), 'rb') as f:
-                self.best_estimator  = pickle.load(f)
+            path = os.path.join(logdir, "checkpoint_" + str(self.iters), "checkpoint")
+            with open(path, 'rb') as f:
+                self.best_estimator_ = pickle.load(f)[0]
+                print(self.best_estimator_)
 
         return self
 
@@ -266,12 +268,13 @@ class _Trainable(Trainable):
 
 
     def _save(self, checkpoint_dir):
-        with open(os.path.join(checkpoint_dir, "checkpoint"), 'wb') as f:
+        path = os.path.join(checkpoint_dir, "checkpoint")
+        with open(path, 'wb') as f:
             pickle.dump(self.estimator, f)
-        return checkpoint_dir
+        return path
 
     def _restore(self, checkpoint):
-        with open(os.path.join(checkpoint, "checkpoint"), 'rb') as f:
+        with open(checkpoint, 'rb') as f:
             self.estimator = pickle.load(f)
 
     def reset_config(self, new_config):
