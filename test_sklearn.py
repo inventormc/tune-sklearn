@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC, SVC
 from sklearn import linear_model
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import SGDClassifier
 from ray.tune.schedulers import PopulationBasedTraining, MedianStoppingRule
 import random
 
@@ -83,22 +84,27 @@ def pbt():
     y = iris.target
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.5)
 
-    clf = RandomForestClassifier()
+    clf = SGDClassifier()
     param_grid = {
-        'n_estimators': randint(20, 80)
+        #'n_estimators': randint(20, 80)
+        'alpha': tune.sample_from(lambda spec: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1]))
     }
 
 
     tune_search = TuneCV(clf, PopulationBasedTraining(
                 time_attr="training_iteration",
-                metric="mean_accuracy",
+                metric="average_test_score",
                 mode="max",
                 perturbation_interval=5,
                 resample_probability=1.0,
                 hyperparam_mutations = {
-                    "n_estimators" : lambda: random.randint(20,80)
-                })
-        , param_grid, 20, refit=False)
+                    "alpha" : lambda: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1])
+                }),
+                param_grid=param_grid,
+                num_samples=5,
+                refit=False,
+                early_stopping=True,
+                iters=10)
     tune_search.fit(x_train, y_train)
 
     pred = tune_search.predict(x_test)
