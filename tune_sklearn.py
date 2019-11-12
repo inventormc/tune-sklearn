@@ -9,6 +9,8 @@ from ray.tune import Trainable
 from ray.tune.schedulers import PopulationBasedTraining, MedianStoppingRule
 from sklearn.base import clone
 import numpy as np
+import os
+import pickle
 
 class TuneCV(BaseEstimator):
     # TODO
@@ -105,6 +107,8 @@ class TuneCV(BaseEstimator):
     def _refit(self, X, y=None, **fit_params):
         self.best_estimator_.fit(X, y, **fit_params)
 
+    def _partial_fit_and_early_stop(self,):
+
     def fit(self, X, y=None, groups=None, **fit_params):
         classifier = is_classifier(self.estimator)
         cv = check_cv(self.cv, y, classifier)
@@ -144,6 +148,10 @@ class TuneCV(BaseEstimator):
         self.best_estimator_.set_params(**self.best_params)
         if self.refit:
             self._refit(X, y, **fit_params)
+        else:
+            logdir = analysis.get_best_logdir(metric="test_accuracy", mode="max")
+            with open(os.path.join(logdir, "checkpoint"), 'rb') as f:
+                self.best_estimator  = pickle.load(f)
 
         return self
 
@@ -205,10 +213,13 @@ class _Trainable(Trainable):
 
 
     def _save(self, checkpoint_dir):
-        pass
+        with open(os.path.join(checkpoint_dir, "checkpoint"), 'wb') as f:
+            pickle.dump(self.estimator, f)
+        return checkpoint_dir
 
     def _restore(self, checkpoint):
-        pass
+        with open(os.path.join(checkpoint, "checkpoint"), 'rb') as f:
+            self.estimator = pickle.load(f)
 
 
 

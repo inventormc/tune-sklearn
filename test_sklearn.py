@@ -98,7 +98,7 @@ def pbt():
                 hyperparam_mutations = {
                     "n_estimators" : lambda: random.randint(20,80)
                 })
-        , param_grid, 20)
+        , param_grid, 20, refit=False)
     tune_search.fit(x_train, y_train)
 
     pred = tune_search.predict(x_test)
