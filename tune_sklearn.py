@@ -1,7 +1,7 @@
-from scipy.stats import _distn_infrastructure
+from scipy.stats import _distn_infrastructure, rankdata
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_is_fitted
-from sklearn.model_selection import cross_validate
+from sklearn.model_selection import cross_validate, ParameterGrid
 from sklearn.model_selection import check_cv
 from sklearn.metrics.scorer import check_scoring
 from sklearn.base import is_classifier
@@ -135,6 +135,7 @@ class TuneCV(BaseEstimator):
         self._check_params()
         classifier = is_classifier(self.estimator)
         cv = check_cv(self.cv, y, classifier)
+        n_splits = cv.get_n_splits(X, y, groups)
         self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
         config={}
         hyperparams = self.param_grid
@@ -179,6 +180,9 @@ class TuneCV(BaseEstimator):
                     config=config,
                     checkpoint_at_end=True
                     )
+        
+        candidate_params = list(ParameterGrid(self.param_grid))
+        self.cv_results_ = self._format_results(candidate_params, self.scorer_, n_splits, analysis)
 
         best_config = analysis.get_best_config(metric="average_test_score", mode="max")
         for key in ['estimator', 'scheduler', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring', 'early_stopping', 'iters']:
@@ -191,6 +195,54 @@ class TuneCV(BaseEstimator):
 
     def score(self, X, y=None):
         return self.scorer_(self.best_estimator_, X, y)
+    
+    def _format_results(self, candidate_params, scorers, n_splits, out):
+        # TODO: Extract relevant parts out of `analysis` object from Tune
+        if self.return_train_score:
+            fit_times, test_scores, score_times, train_scores = zip(*out)
+        else:
+            fit_times, test_scores, score_times = zip(*out)
+        
+        results = {"params": candidate_params}
+        n_candidates = len(candidate_params)
+
+        def _store(
+            results,
+            key_name,
+            array,
+            n_splits,
+            n_candidates,
+            weights=None,
+            splits=False,
+            rank=False,
+        ):
+            """A small helper to store the scores/times to the cv_results_"""
+            # When iterated first by n_splits and then by parameters
+            array = np.array(array, dtype=np.float64).reshape(n_splits, n_candidates)
+            if splits:
+                for split_i in range(n_splits):
+                    results["split%d_%s" % (split_i, key_name)] = array[:, split_i]
+
+            array_means = np.average(array, axis=1, weights=weights)
+            results["mean_%s" % key_name] = array_means
+            # Weighted std is not directly available in numpy
+            array_stds = np.sqrt(
+                np.average((array - array_means[:, np.newaxis]) ** 2, axis=1, weights=weights)
+            )
+            results["std_%s" % key_name] = array_stds
+
+            if rank:
+                results["rank_%s" % key_name] = np.asarray(
+                    rankdata(-array_means, method="min"), dtype=np.int32
+                )
+        
+        _store(results, 'fit_time', fit_times, n_splits, n_candidates)
+        _store(results, 'score_time', score_times, n_splits, n_candidates)
+        _store(results, "test_score", test_scores, n_splits, n_candidates, splits=True, rank=True)
+        if self.return_train_score:
+            _store(results, "train_score", train_scores, n_splits, n_candidates, splits=True)
+
+        return results
 
     # We may not need this function if the user passes in the actual scheduler
     # but then they need to follow this syntax for the hyperparam_mutations
