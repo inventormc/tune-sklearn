@@ -90,8 +90,7 @@ def pbt():
         'alpha': tune.sample_from(lambda spec: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1]))
     }
 
-
-    tune_search = TuneCV(clf, PopulationBasedTraining(
+    scheduler = PopulationBasedTraining(
                 time_attr="training_iteration",
                 metric="average_test_score",
                 mode="max",
@@ -99,10 +98,12 @@ def pbt():
                 resample_probability=1.0,
                 hyperparam_mutations = {
                     "alpha" : lambda: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1])
-                }),
+                })
+
+    tune_search = TuneCV(clf, 
                 param_grid=param_grid,
-                num_samples=5,
-                refit=False,
+                n_jobs=5,
+                refit=True,
                 early_stopping=True,
                 iters=10)
     tune_search.fit(x_train, y_train)

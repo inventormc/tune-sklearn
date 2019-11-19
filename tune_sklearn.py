@@ -87,37 +87,55 @@ class TuneCV(BaseEstimator):
     def transform(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.transform
+    
+    def _check_params(self):
+        if not hasattr(self.estimator, 'fit'):
+            raise ValueError('estimator must be a scikit-learn estimator.')
+
+        if type(self.param_grid) is not dict:
+            raise ValueError('param_distributions must be a dictionary.')
+
+        if self.early_stopping and not hasattr(self.estimator, 'partial_fit'):
+            raise ValueError('estimator must support partial_fit.')
 
     # TODO: Add all arguments found in optuna to constructor
     def __init__(self,
                  estimator,
-                 scheduler,
-                 param_grid=None,
-                 num_samples=3,
+                 param_grid,
+                 scheduler=None,
+                 scoring=None,
+                 n_jobs=None,
                  cv=3,
                  refit=True,
-                 scoring=None,
+                 verbose=0,
+                 error_score='raise',
+                 return_train_score=False,
                  early_stopping=False,
-                 iters=None
+                 iters=None,
     ):
         self.estimator = estimator
+        self.param_grid = param_grid
         self.scheduler = scheduler
-        self.num_samples = num_samples
+        self.num_samples = n_jobs
         self.cv = cv
         self.scoring = check_scoring(estimator, scoring)
         self.refit = refit
-        self.param_grid = param_grid
+        self.verbose = verbose
+        self.error_score = error_score
+        self.return_train_score = return_train_score
         self.early_stopping = early_stopping
         self.iters = iters
 
     def _refit(self, X, y=None, **fit_params):
+        self.best_estimator_ = clone(self.estimator)
+        self.best_estimator_.set_params(**self.best_params)
         self.best_estimator_.fit(X, y, **fit_params)
 
-    #def _partial_fit_and_early_stop(self,):
-
     def fit(self, X, y=None, groups=None, **fit_params):
+        self._check_params()
         classifier = is_classifier(self.estimator)
         cv = check_cv(self.cv, y, classifier)
+        self.scorer_ = check_scoring(self.estimator, scoring=self.scoring)
         config={}
         hyperparams = self.param_grid
         for key, distribution in hyperparams.items():
@@ -143,7 +161,7 @@ class TuneCV(BaseEstimator):
                     _Trainable,
                     scheduler=self.scheduler,
                     reuse_actors=True,
-                    verbose=True, # silence in the future
+                    verbose=self.verbose,
                     stop={"training_iteration":self.iters},
                     num_samples=self.num_samples,
                     config=config,
@@ -155,35 +173,24 @@ class TuneCV(BaseEstimator):
                     _Trainable,
                     scheduler=self.scheduler,
                     reuse_actors=True,
-                    verbose=True, # silence in the future
+                    verbose=self.verbose,
                     stop={"training_iteration":1},
                     num_samples=self.num_samples,
                     config=config,
                     checkpoint_at_end=True
                     )
 
+        best_config = analysis.get_best_config(metric="average_test_score", mode="max")
+        for key in ['estimator', 'scheduler', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring', 'early_stopping', 'iters']:
+            best_config.pop(key)
+        self.best_params = best_config
         if self.refit:
-            best_config = analysis.get_best_config(metric="average_test_score", mode="max")
-            for key in ['estimator', 'scheduler', 'X', 'y', 'groups', 'cv', 'fit_params', 'scoring', 'early_stopping', 'iters']:
-                best_config.pop(key)
-            self.best_params = best_config
-            self.best_estimator_ = clone(self.estimator)
-            self.best_estimator_.set_params(**self.best_params)
             self._refit(X, y, **fit_params)
-        else:
-            logdir = analysis.get_best_logdir(metric="average_test_score", mode="max")
-            path = os.path.join(logdir, "checkpoint_" + str(self.iters), "checkpoint")
-            with open(path, 'rb') as f:
-                self.best_estimator_ = pickle.load(f)[0]
-                print(self.best_estimator_)
 
         return self
 
-
-
-    # TODO
     def score(self, X, y=None):
-        pass
+        return self.scorer_(self.best_estimator_, X, y)
 
     # We may not need this function if the user passes in the actual scheduler
     # but then they need to follow this syntax for the hyperparam_mutations
@@ -225,9 +232,6 @@ class _Trainable(Trainable):
         else:
             self.estimator.set_params(**self.estimator_config)
 
-
-
-
     def _train(self):
         if self.early_stopping:
             for i, (train, test) in enumerate(self.cv.split(self.X, self.y)):
@@ -243,12 +247,7 @@ class _Trainable(Trainable):
             self.fold_scores[i] = self.scoring(self.estimator[i], X_test, y_test)
 
             self.mean_scores = sum(self.fold_scores)/len(self.fold_scores)
-
-            return {
-                    "average_test_score": self.mean_scores
-                    }
-
-
+            return {"average_test_score": self.mean_scores}
         else:
             scores = cross_validate(
                 self.estimator,
@@ -261,11 +260,7 @@ class _Trainable(Trainable):
             )
 
             self.test_accuracy = sum(scores["test_score"])/len(scores["test_score"])
-
-            return {
-                    "average_test_score": self.test_accuracy
-                    }
-
+            return {"average_test_score": self.test_accuracy}
 
     def _save(self, checkpoint_dir):
         path = os.path.join(checkpoint_dir, "checkpoint")
