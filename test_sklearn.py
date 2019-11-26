@@ -1,5 +1,5 @@
-from tune_sklearn import TuneCV
-from scipy.stats import randint
+from tune_sklearn import TuneRandomizedSearchCV, TuneGridSearchCV
+from scipy.stats import randint, uniform
 from sklearn.model_selection import GridSearchCV
 from ray import tune
 import numpy as np
@@ -85,10 +85,12 @@ def pbt():
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.5)
 
     clf = SGDClassifier()
-    param_grid = {
-        #'n_estimators': randint(20, 80)
-        'alpha': [1e-4, 1e-3, 1e-2, 1e-1]
+    param_distributions = {
+        'alpha': uniform(1e-4, 1e-1)
     }
+    # param_grid = {
+    #     'alpha': [1e-4, 1e-3, 1e-2, 1e-1]
+    # }
 
     scheduler = PopulationBasedTraining(
                 time_attr="training_iteration",
@@ -100,13 +102,21 @@ def pbt():
                     "alpha" : lambda: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1])
                 })
 
-    tune_search = TuneCV(clf, 
-                param_grid=param_grid,
+    tune_search = TuneRandomizedSearchCV(clf, 
+                param_distributions,
                 refit=True,
                 early_stopping=True,
                 iters=10,
-                verbose=0,
+                verbose=1,
+                num_samples=3,
                 )
+    # tune_search = TuneGridSearchCV(clf, 
+    #             param_grid,
+    #             refit=True,
+    #             early_stopping=True,
+    #             iters=10,
+    #             verbose=1,
+    #             )
     tune_search.fit(x_train, y_train)
 
     pred = tune_search.predict(x_test)
