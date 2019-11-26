@@ -87,7 +87,7 @@ def pbt():
     clf = SGDClassifier()
     param_grid = {
         #'n_estimators': randint(20, 80)
-        'alpha': tune.sample_from(lambda spec: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1]))
+        'alpha': [1e-4, 1e-3, 1e-2, 1e-1]
     }
 
     scheduler = PopulationBasedTraining(
@@ -102,17 +102,18 @@ def pbt():
 
     tune_search = TuneCV(clf, 
                 param_grid=param_grid,
-                n_jobs=5,
                 refit=True,
                 early_stopping=True,
-                iters=10)
+                iters=10,
+                verbose=0,
+                )
     tune_search.fit(x_train, y_train)
 
     pred = tune_search.predict(x_test)
     print(pred)
     accuracy = np.count_nonzero(np.array(pred) == np.array(y_test))/len(pred)
     print(accuracy)
-    print(tune_search.best_params)
+    print(tune_search.best_params_)
 
 def linear_iris():
     iris = datasets.load_iris()
