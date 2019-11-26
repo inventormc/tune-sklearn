@@ -44,12 +44,8 @@ class RandomizedSearchTest(unittest.TestCase):
 
         clf = SGDClassifier()
         param_distributions = {
-            #'alpha': tune.sample_from(uniform(1e-4, 1e-1))
-            'alpha': np.random.uniform(1e-4, 1e-1)
+            'alpha': uniform(1e-4, 1e-1)
         }
-        # param_grid = {
-        #     'alpha': [1e-4, 1e-3, 1e-2, 1e-1]
-        # }
 
         scheduler = PopulationBasedTraining(
                     time_attr="training_iteration",
@@ -58,7 +54,7 @@ class RandomizedSearchTest(unittest.TestCase):
                     perturbation_interval=5,
                     resample_probability=1.0,
                     hyperparam_mutations = {
-                        "alpha" : lambda: np.random.uniform()
+                        "alpha" : lambda: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1])
                     })
 
         tune_search = TuneRandomizedSearchCV(clf,
@@ -69,13 +65,6 @@ class RandomizedSearchTest(unittest.TestCase):
                     verbose=1,
                     num_samples=3,
                     )
-        # tune_search = TuneGridSearchCV(clf,
-        #             param_grid,
-        #             refit=True,
-        #             early_stopping=True,
-        #             iters=10,
-        #             verbose=1,
-        #             )
         tune_search.fit(x_train, y_train)
 
         pred = tune_search.predict(x_test)

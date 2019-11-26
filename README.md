@@ -13,7 +13,7 @@ x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.5)
 clf = SGDClassifier()
 param_grid = {
     'n_estimators': scipy.stats.randint(20, 80),
-    'alpha': scipy.stats.uniform()
+    'alpha': scipy.stats.uniform(1e-4, 1e-1)
 }
 
 scheduler = PopulationBasedTraining(
@@ -23,7 +23,7 @@ scheduler = PopulationBasedTraining(
             perturbation_interval=5,
             resample_probability=1.0,
             hyperparam_mutations = {
-                "alpha" : lambda: np.random.uniform()
+                "alpha" : lambda: np.random.choice([1e-4, 1e-3, 1e-2, 1e-1])
             })
 
 tune_search = TuneRandomizedSearchCV(clf, 
