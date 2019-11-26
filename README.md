@@ -28,6 +28,7 @@ scheduler = PopulationBasedTraining(
 
 tune_search = TuneRandomizedSearchCV(clf, 
             param_grid=param_grid,
+            scheduler=scheduler,
             n_jobs=5,
             refit=True,
             early_stopping=True,
@@ -56,7 +57,10 @@ tuned_parameters = {'kernel': ['rbf'],
                     'C': [1, 10, 100, 1000]
                     }
 
-tune_search = TuneGridSearchCV(SVC(), MedianStoppingRule(), tuned_parameters, 20)
+tune_search = TuneGridSearchCV(SVC(),  
+                               tuned_parameters, 
+                               scheduler=MedianStoppingRule(), 
+                               iters=20)
 tune_search.fit(X_train, y_train)
 
 pred = tune_search.predict(X_test)
