@@ -1,6 +1,6 @@
 """
-    A GridSearchCV interface built with a Ray Tune back-end. 
-    Implementation derived from referencing the equivalent 
+    A GridSearchCV interface built with a Ray Tune back-end.
+    Implementation derived from referencing the equivalent
     GridSearchCV interfaces from Dask and Optuna.
     https://ray.readthedocs.io/en/latest/tune.html
     https://dask.org
@@ -73,7 +73,7 @@ class _Trainable(Trainable):
             if self.return_train_score:
                 self.mean_train_scores = sum(self.fold_train_scores) / len(self.fold_train_scores)
                 return {"average_test_score": self.mean_scores, "average_train_score": self.mean_train_scores}
-            
+
             return {"average_test_score": self.mean_scores}
         else:
             scores = cross_validate(
@@ -115,6 +115,7 @@ class TuneBaseSearchCV(BaseEstimator):
     # TODO
     @property
     def best_params_(self):
+        # only if refit true
         check_is_fitted(self, "cv_results_")
         self._check_if_refit("best_params_")
         return self.cv_results_["params"][self.best_index_]
@@ -122,6 +123,7 @@ class TuneBaseSearchCV(BaseEstimator):
     # TODO
     @property
     def best_score_(self):
+        # only if refit true
         check_is_fitted(self, "cv_results_")
         self._check_if_refit("best_score_")
         return self.cv_results_["mean_test_score"][self.best_index_]
@@ -166,14 +168,14 @@ class TuneBaseSearchCV(BaseEstimator):
     def transform(self):
         check_is_fitted(self, "cv_results_")
         return self.best_estimator_.transform
-    
+
     def _check_params(self):
         if not hasattr(self.estimator, 'fit'):
             raise ValueError('estimator must be a scikit-learn estimator.')
 
         if self.early_stopping and not hasattr(self.estimator, 'partial_fit'):
             raise ValueError('estimator must support partial_fit.')
-    
+
     def _check_if_refit(self, attr):
         if not self.refit:
             raise AttributeError(
@@ -273,19 +275,20 @@ class TuneBaseSearchCV(BaseEstimator):
         return self
 
     def score(self, X, y=None):
+        # only if refit true
         return self.scorer_(self.best_estimator_, X, y)
-    
+
     def _format_results(self, candidate_params, n_splits, out):
         # TODO: Extract relevant parts out of `analysis` object from Tune
         dfs = out.trial_dataframes
         if self.return_train_score:
-            arrays = [zip(*(df[df["done"] == True][["average_test_score", "average_train_score", "time_total_s"]].to_numpy())) 
+            arrays = [zip(*(df[df["done"] == True][["average_test_score", "average_train_score", "time_total_s"]].to_numpy()))
                       for df in dfs.values()]
             test_scores, train_scores, fit_times = zip(*arrays)
-        else: 
+        else:
             arrays = [zip(*(df[df["done"] == True][["average_test_score", "time_total_s"]].to_numpy())) for df in dfs.values()]
             test_scores, fit_times = zip(*arrays)
-        
+
         results = {"params": candidate_params}
         n_candidates = len(candidate_params)
 
@@ -359,7 +362,7 @@ class TuneRandomizedSearchCV(TuneBaseSearchCV):
         self.param_distributions = param_distributions
         self.num_samples = num_samples
         self.random_state = random_state
-    
+
     def _get_param_iterator(self):
         return ParameterSampler(self.param_distributions, self.num_samples, random_state=self.random_state)
 
@@ -394,6 +397,6 @@ class TuneGridSearchCV(TuneBaseSearchCV):
 
         _check_param_grid(param_grid)
         self.param_grid = param_grid
-    
+
     def _get_param_iterator(self):
         return ParameterGrid(self.param_grid)
